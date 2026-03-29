@@ -1,0 +1,134 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.app {
+  min-height: 100%;
+  position: relative;
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(120, 80, 220, 0.45) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 100, 150, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 80%, rgba(60, 160, 255, 0.35) 0%, transparent 55%),
+    linear-gradient(160deg, #0f0c29 0%, #1a1a2e 40%, #16213e 100%);
+  z-index: -1;
+}
+
+.content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 20px 0;
+}
+
+.hero {
+  text-align: center;
+  padding: 32px 0 40px;
+}
+
+.hero h1 {
+  font-size: 42px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff 30%, rgba(255,255,255,0.6));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.hero p {
+  margin-top: 8px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
+}
+
+/* --- Variant showcase --- */
+.variants {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.variant {
+  border-radius: 24px;
+  padding: 32px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  position: relative;
+  overflow: visible;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.variant-header {
+  text-align: center;
+}
+
+.variant-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 4px;
+}
+
+.variant-header p {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+}
+
+/* --- Toast --- */
+.toast {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: toast-in 0.25s ease-out, toast-out 0.3s 1.5s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+
+/* Light bg variant needs dark text */
+.variant:last-child .variant-header h3 {
+  color: rgba(0, 0, 0, 0.8);
+}
+.variant:last-child .variant-header p {
+  color: rgba(0, 0, 0, 0.4);
+}
+.variant:last-child .toast {
+  color: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.08);
+}
