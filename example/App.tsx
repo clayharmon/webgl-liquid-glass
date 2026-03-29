@@ -32,7 +32,7 @@ const INLINE_STYLE = {
 // --- Toast ---
 function useToast() {
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const show = useCallback((text: string) => {
     clearTimeout(timeoutRef.current);
