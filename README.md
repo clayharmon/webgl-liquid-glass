@@ -2,6 +2,8 @@
 
 Apple's Liquid Glass navbar effect for the web. Built with WebGL shaders, CSS backdrop-filter, and spring physics.
 
+**[Live Demo](https://clayharmon.github.io/webgl-liquid-glass/)**
+
 - WebGL-powered specular highlights, chromatic aberration, and motion shimmer
 - Real CSS `backdrop-filter` blur (sees through to actual page content)
 - Spring-animated pill indicator with drag-to-switch

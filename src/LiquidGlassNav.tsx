@@ -51,7 +51,6 @@ export function LiquidGlassNav({
 
   const springX = useRef(createSpring(0));
   const springW = useRef(createSpring(0));
-  // Morph springs — drive the liquid/momentum deformation
   const springSkew = useRef(createSpring(0));
   const springBulge = useRef(createSpring(0));
 
@@ -59,38 +58,61 @@ export function LiquidGlassNav({
   const initializedRef = useRef(false);
   const itemsRef = useRef(items);
   const onItemChangeRef = useRef(onItemChange);
+  // Track which tab the pill is visually targeting (may differ from activeItem during press)
+  const visualTargetRef = useRef(activeItem);
 
   activeRef.current = activeItem;
   itemsRef.current = items;
   onItemChangeRef.current = onItemChange;
 
   const drag = useRef<DragState>(emptyDrag());
-  const didDragRef = useRef(false);
 
-  // Measure active tab and set spring targets
-  const measureAndTarget = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const idx = items.findIndex((i) => i.id === activeRef.current);
-    const btn = itemRefs.current[idx];
-    if (!btn) return;
+  // Measure a tab by id and set spring targets to it
+  const targetTab = useCallback(
+    (tabId: string) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const idx = items.findIndex((i) => i.id === tabId);
+      const btn = itemRefs.current[idx];
+      if (!btn) return;
 
-    const cRect = container.getBoundingClientRect();
-    const bRect = btn.getBoundingClientRect();
-    const x = bRect.left - cRect.left + bRect.width / 2;
-    const w = bRect.width + PILL_PADDING_X * 2;
+      const cRect = container.getBoundingClientRect();
+      const bRect = btn.getBoundingClientRect();
+      const x = bRect.left - cRect.left + bRect.width / 2;
+      const w = bRect.width + PILL_PADDING_X * 2;
 
-    springX.current.target = x;
-    springW.current.target = w;
+      springX.current.target = x;
+      springW.current.target = w;
+      visualTargetRef.current = tabId;
 
-    if (!initializedRef.current) {
-      springX.current.current = x;
-      springW.current.current = w;
-      initializedRef.current = true;
+      if (!initializedRef.current) {
+        springX.current.current = x;
+        springW.current.current = w;
+        initializedRef.current = true;
+      }
+    },
+    [items],
+  );
+
+  // Find which tab button is under a pointer position
+  const findTabAt = useCallback((clientX: number, clientY: number): number => {
+    for (let i = 0; i < itemRefs.current.length; i++) {
+      const btn = itemRefs.current[i];
+      if (!btn) continue;
+      const r = btn.getBoundingClientRect();
+      if (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      ) {
+        return i;
+      }
     }
-  }, [items]);
+    return -1;
+  }, []);
 
-  // Find nearest tab to current drag position
+  // Find nearest tab to current drag x position
   const findNearestTab = useCallback((): string | null => {
     const container = containerRef.current;
     if (!container) return null;
@@ -115,48 +137,47 @@ export function LiquidGlassNav({
   }, []);
 
   // --- Pointer handlers ---
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    const container = containerRef.current;
-    if (!container) return;
+  // Press on ANY tab: pill springs there, bubble inflates, drag begins.
+  // onItemChange only fires on release.
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
 
-    // Hit-test against the ACTIVE TAB BUTTON (not the pill div)
-    // This gives a reliable, large touch target
-    const activeIdx = itemsRef.current.findIndex(
-      (i) => i.id === activeRef.current,
-    );
-    const activeBtn = itemRefs.current[activeIdx];
-    if (!activeBtn) return;
+      // Find which tab was pressed
+      const tabIdx = findTabAt(e.clientX, e.clientY);
+      if (tabIdx < 0) return;
 
-    const btnRect = activeBtn.getBoundingClientRect();
-    const pad = 10;
-    const isOnActiveTab =
-      e.clientX >= btnRect.left - pad &&
-      e.clientX <= btnRect.right + pad &&
-      e.clientY >= btnRect.top - pad &&
-      e.clientY <= btnRect.bottom + pad;
+      const pressedItem = itemsRef.current[tabIdx];
+      if (!pressedItem) return;
 
-    if (!isOnActiveTab) return;
+      // Capture pointer — all events go to the nav, prevents button click
+      container.setPointerCapture(e.pointerId);
 
-    // Capture pointer on the container — all future pointer events go here
-    // This also prevents the button's onClick from firing
-    container.setPointerCapture(e.pointerId);
+      // Spring the pill toward the pressed tab
+      targetTab(pressedItem.id);
 
-    drag.current = {
-      active: true,
-      moved: false,
-      pointerId: e.pointerId,
-      startPointerX: e.clientX,
-      pillStartX: springX.current.current,
-      currentX: springX.current.current,
-      velocity: 0,
-      prevX: e.clientX,
-    };
-    didDragRef.current = false;
+      // Measure where the pill will land (for drag start position)
+      const cRect = container.getBoundingClientRect();
+      const bRect = itemRefs.current[tabIdx]!.getBoundingClientRect();
+      const tabCenterX = bRect.left - cRect.left + bRect.width / 2;
 
-    // Start bulge (inflate)
-    springBulge.current.target = 1;
-    springX.current.velocity = 0;
-  }, []);
+      drag.current = {
+        active: true,
+        moved: false,
+        pointerId: e.pointerId,
+        startPointerX: e.clientX,
+        pillStartX: tabCenterX,
+        currentX: tabCenterX,
+        velocity: 0,
+        prevX: e.clientX,
+      };
+
+      // Inflate bubble
+      springBulge.current.target = 1;
+    },
+    [findTabAt, targetTab],
+  );
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = drag.current;
@@ -170,7 +191,6 @@ export function LiquidGlassNav({
 
     if (!d.moved && Math.abs(dx) > DRAG_THRESHOLD) {
       d.moved = true;
-      didDragRef.current = true;
     }
 
     if (d.moved) {
@@ -182,7 +202,7 @@ export function LiquidGlassNav({
       );
     }
 
-    // Smooth velocity (EMA) — prevents per-pixel flicker in shader
+    // Smooth velocity (EMA)
     const rawVel = e.clientX - d.prevX;
     d.velocity = d.velocity * (1 - VEL_SMOOTHING) + rawVel * VEL_SMOOTHING;
     d.prevX = e.clientX;
@@ -194,30 +214,25 @@ export function LiquidGlassNav({
       if (!d.active || e.pointerId !== d.pointerId) return;
 
       d.active = false;
-      // Release bulge
       springBulge.current.target = 0;
 
+      // Determine final tab: if dragged, use nearest to drag position.
+      // If not dragged, use the tab we pressed on (visualTarget).
+      let finalTab: string | null;
       if (d.moved) {
-        const nearest = findNearestTab();
-        if (nearest) {
-          onItemChangeRef.current(nearest);
-        }
+        finalTab = findNearestTab();
+      } else {
+        finalTab = visualTargetRef.current;
       }
 
-      requestAnimationFrame(() => {
-        didDragRef.current = false;
-      });
+      if (finalTab) {
+        onItemChangeRef.current(finalTab);
+        // Also fire per-item onClick if present
+        const item = itemsRef.current.find((i) => i.id === finalTab);
+        item?.onClick?.();
+      }
     },
     [findNearestTab],
-  );
-
-  const onButtonClick = useCallback(
-    (item: { id: string; onClick?: () => void }) => {
-      if (didDragRef.current) return;
-      onItemChange(item.id);
-      item.onClick?.();
-    },
-    [onItemChange],
   );
 
   // Main animation loop
@@ -236,13 +251,13 @@ export function LiquidGlassNav({
     const ro = new ResizeObserver(() => {
       const rect = container.getBoundingClientRect();
       renderer.resize(rect.width, rect.height);
-      measureAndTarget();
+      targetTab(activeRef.current);
     });
     ro.observe(container);
 
     const rect = container.getBoundingClientRect();
     renderer.resize(rect.width, rect.height);
-    requestAnimationFrame(() => measureAndTarget());
+    requestAnimationFrame(() => targetTab(activeRef.current));
 
     function loop() {
       if (!running) return;
@@ -257,10 +272,8 @@ export function LiquidGlassNav({
       const sBulge = springBulge.current;
 
       // --- Morph springs ---
-      // Bulge: inflates on press, loose spring for bouncy release
       updateSpring(sBulge, dt, 260, 16);
 
-      // Skew: follows drag velocity with lots of wobble
       if (d.active && d.moved) {
         sSkew.target = d.velocity * 0.6;
       } else {
@@ -273,34 +286,32 @@ export function LiquidGlassNav({
 
       // --- Position / width springs ---
       if (d.active && d.moved) {
+        // Dragging: pill tracks pointer directly
         sx.current = d.currentX;
-        // Smooth velocity for shader — lerp toward target to avoid jitter
         const targetVel = d.velocity / Math.max(dt, 0.001);
         sx.velocity += (targetVel - sx.velocity) * 0.15;
         sw.current = sw.target;
       } else {
+        // Spring toward target (pressed tab or active tab)
         updateSpring(sx, dt);
         updateSpring(sw, dt);
       }
 
       // --- Compute morph transforms ---
-      // Big bubble inflate on press, velocity-based stretch/squish
       const absSkew = Math.abs(skew);
       const morphScaleX = 1 + bulge * 0.12 + Math.min(absSkew * 0.005, 0.2);
-      // Grow MUCH taller on press (bubble breaks out of nav)
-      const morphScaleY = 1 + bulge * 0.55 - Math.min(absSkew * 0.003, 0.12);
-      // Skew for momentum feel
+      const morphScaleY =
+        1 + bulge * 0.55 - Math.min(absSkew * 0.003, 0.12);
       const morphSkewDeg = Math.max(-14, Math.min(14, skew * 0.35));
 
       // --- Update pill DOM ---
       if (pillRef.current) {
         const pillX = sx.current - sw.current / 2;
-        pillRef.current.style.transform =
-          `translateX(${pillX}px) scaleX(${morphScaleX}) scaleY(${morphScaleY}) skewX(${morphSkewDeg}deg)`;
+        pillRef.current.style.transform = `translateX(${pillX}px) scaleX(${morphScaleX}) scaleY(${morphScaleY}) skewX(${morphSkewDeg}deg)`;
         pillRef.current.style.width = `${sw.current}px`;
       }
 
-      // --- Render WebGL (pass effective pill dimensions) ---
+      // --- Render WebGL ---
       renderer.render({
         time: now / 1000,
         lightPos: motion.lightPos,
@@ -323,11 +334,12 @@ export function LiquidGlassNav({
       motion.destroy();
       renderer.destroy();
     };
-  }, [measureAndTarget]);
+  }, [targetTab]);
 
+  // When activeItem changes (from external state), re-target the pill
   useEffect(() => {
-    measureAndTarget();
-  }, [activeItem, measureAndTarget]);
+    targetTab(activeItem);
+  }, [activeItem, targetTab]);
 
   return (
     <nav
@@ -394,14 +406,13 @@ export function LiquidGlassNav({
         }}
       />
 
-      {/* Tab items */}
+      {/* Tab items — all pointer interaction handled by nav, not buttons */}
       {items.map((item, i) => (
         <button
           key={item.id}
           ref={(el) => {
             itemRefs.current[i] = el;
           }}
-          onClick={() => onButtonClick(item)}
           style={{
             position: 'relative',
             zIndex: 1,
@@ -413,8 +424,6 @@ export function LiquidGlassNav({
             padding: '6px 20px',
             border: 'none',
             background: 'none',
-            // Active tab: pointer-events none so pill drag works
-            pointerEvents: item.id === activeItem ? 'none' : 'auto',
             color: item.id === activeItem ? activeColor : inactiveColor,
             fontSize: 10,
             fontFamily:
