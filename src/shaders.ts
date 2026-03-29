@@ -18,6 +18,7 @@ uniform float u_pillHeight;
 uniform float u_navRadius;
 uniform float u_transitionVel;
 uniform float u_pressAmt;
+uniform vec3 u_tintColor;
 
 float sdRoundedBox(vec2 p, vec2 halfSize, float radius) {
   vec2 q = abs(p) - halfSize + radius;
@@ -70,10 +71,19 @@ void main() {
   float pDist01 = length(pFromPill);
   float chromStrength = smoothstep(0.35, 1.0, pDist01) * pillMask;
 
+  // Base white, blending toward tint color at pill edges
   vec3 color = vec3(1.0);
-  color.r += chromStrength * pFromPill.x * 0.22;
-  color.b -= chromStrength * pFromPill.x * 0.22;
-  color.g += chromStrength * abs(pFromPill.y) * 0.08;
+  vec3 edgeTint = mix(vec3(1.0), u_tintColor, chromStrength * 0.6);
+  color = mix(color, edgeTint, pillMask);
+
+  // RGB split (classic chromatic aberration)
+  color.r += chromStrength * pFromPill.x * 0.18;
+  color.b -= chromStrength * pFromPill.x * 0.18;
+  color.g += chromStrength * abs(pFromPill.y) * 0.06;
+
+  // Tinted edge glow — active color refracts at the pill boundary
+  float edgeGlow = smoothstep(0.6, 1.0, pDist01) * pillMask;
+  color += u_tintColor * edgeGlow * 0.2;
 
   // Nav-level chromatic at edges
   vec2 navNorm = p / (u_resolution * 0.5);

@@ -11,6 +11,7 @@ const UNIFORM_NAMES = [
   'u_navRadius',
   'u_transitionVel',
   'u_pressAmt',
+  'u_tintColor',
 ] as const;
 
 export class LiquidGlassRenderer {
@@ -86,6 +87,12 @@ export class LiquidGlassRenderer {
     gl.uniform1f(uniforms.u_navRadius!, params.navRadius * dpr);
     gl.uniform1f(uniforms.u_transitionVel!, params.transitionVel);
     gl.uniform1f(uniforms.u_pressAmt!, params.pressAmt);
+    gl.uniform3f(
+      uniforms.u_tintColor!,
+      params.tintColor[0],
+      params.tintColor[1],
+      params.tintColor[2],
+    );
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }

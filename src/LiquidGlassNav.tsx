@@ -35,6 +35,47 @@ function emptyDrag(): DragState {
   };
 }
 
+let _parseCtx: CanvasRenderingContext2D | null = null;
+function parseColor(color: string): [number, number, number] {
+  if (!_parseCtx) {
+    _parseCtx = document.createElement('canvas').getContext('2d')!;
+  }
+  _parseCtx.fillStyle = '#000';
+  _parseCtx.fillStyle = color;
+  const c = _parseCtx.fillStyle;
+  if (c.startsWith('#')) {
+    return [
+      parseInt(c.slice(1, 3), 16) / 255,
+      parseInt(c.slice(3, 5), 16) / 255,
+      parseInt(c.slice(5, 7), 16) / 255,
+    ];
+  }
+  const m = c.match(/[\d.]+/g);
+  if (m && m.length >= 3) {
+    return [Number(m[0]) / 255, Number(m[1]) / 255, Number(m[2]) / 255];
+  }
+  return [1, 1, 1];
+}
+
+const BUTTON_STYLE = {
+  display: 'flex' as const,
+  flexDirection: 'column' as const,
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+  gap: 2,
+  padding: '6px 20px',
+  border: 'none',
+  background: 'none',
+  fontSize: 10,
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+  cursor: 'pointer',
+  WebkitTapHighlightColor: 'transparent',
+  WebkitUserSelect: 'none' as const,
+  userSelect: 'none' as const,
+  lineHeight: 1,
+};
+
 export function LiquidGlassNav({
   items,
   activeItem,
@@ -47,6 +88,7 @@ export function LiquidGlassNav({
   const containerRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
+  const activeClipRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const springX = useRef(createSpring(0));
@@ -58,16 +100,17 @@ export function LiquidGlassNav({
   const initializedRef = useRef(false);
   const itemsRef = useRef(items);
   const onItemChangeRef = useRef(onItemChange);
-  // Track which tab the pill is visually targeting (may differ from activeItem during press)
   const visualTargetRef = useRef(activeItem);
+  const tintColorRef = useRef<[number, number, number]>(parseColor(activeColor));
+  const navWidthRef = useRef(0);
 
   activeRef.current = activeItem;
   itemsRef.current = items;
   onItemChangeRef.current = onItemChange;
+  tintColorRef.current = parseColor(activeColor);
 
   const drag = useRef<DragState>(emptyDrag());
 
-  // Measure a tab by id and set spring targets to it
   const targetTab = useCallback(
     (tabId: string) => {
       const container = containerRef.current;
@@ -84,6 +127,7 @@ export function LiquidGlassNav({
       springX.current.target = x;
       springW.current.target = w;
       visualTargetRef.current = tabId;
+      navWidthRef.current = cRect.width;
 
       if (!initializedRef.current) {
         springX.current.current = x;
@@ -94,25 +138,26 @@ export function LiquidGlassNav({
     [items],
   );
 
-  // Find which tab button is under a pointer position
-  const findTabAt = useCallback((clientX: number, clientY: number): number => {
-    for (let i = 0; i < itemRefs.current.length; i++) {
-      const btn = itemRefs.current[i];
-      if (!btn) continue;
-      const r = btn.getBoundingClientRect();
-      if (
-        clientX >= r.left &&
-        clientX <= r.right &&
-        clientY >= r.top &&
-        clientY <= r.bottom
-      ) {
-        return i;
+  const findTabAt = useCallback(
+    (clientX: number, clientY: number): number => {
+      for (let i = 0; i < itemRefs.current.length; i++) {
+        const btn = itemRefs.current[i];
+        if (!btn) continue;
+        const r = btn.getBoundingClientRect();
+        if (
+          clientX >= r.left &&
+          clientX <= r.right &&
+          clientY >= r.top &&
+          clientY <= r.bottom
+        ) {
+          return i;
+        }
       }
-    }
-    return -1;
-  }, []);
+      return -1;
+    },
+    [],
+  );
 
-  // Find nearest tab to current drag x position
   const findNearestTab = useCallback((): string | null => {
     const container = containerRef.current;
     if (!container) return null;
@@ -136,28 +181,20 @@ export function LiquidGlassNav({
     return bestId;
   }, []);
 
-  // --- Pointer handlers ---
-  // Press on ANY tab: pill springs there, bubble inflates, drag begins.
-  // onItemChange only fires on release.
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       const container = containerRef.current;
       if (!container) return;
 
-      // Find which tab was pressed
       const tabIdx = findTabAt(e.clientX, e.clientY);
       if (tabIdx < 0) return;
 
       const pressedItem = itemsRef.current[tabIdx];
       if (!pressedItem) return;
 
-      // Capture pointer — all events go to the nav, prevents button click
       container.setPointerCapture(e.pointerId);
-
-      // Spring the pill toward the pressed tab
       targetTab(pressedItem.id);
 
-      // Measure where the pill will land (for drag start position)
       const cRect = container.getBoundingClientRect();
       const bRect = itemRefs.current[tabIdx]!.getBoundingClientRect();
       const tabCenterX = bRect.left - cRect.left + bRect.width / 2;
@@ -173,7 +210,6 @@ export function LiquidGlassNav({
         prevX: e.clientX,
       };
 
-      // Inflate bubble
       springBulge.current.target = 1;
     },
     [findTabAt, targetTab],
@@ -202,7 +238,6 @@ export function LiquidGlassNav({
       );
     }
 
-    // Smooth velocity (EMA)
     const rawVel = e.clientX - d.prevX;
     d.velocity = d.velocity * (1 - VEL_SMOOTHING) + rawVel * VEL_SMOOTHING;
     d.prevX = e.clientX;
@@ -216,8 +251,6 @@ export function LiquidGlassNav({
       d.active = false;
       springBulge.current.target = 0;
 
-      // Determine final tab: if dragged, use nearest to drag position.
-      // If not dragged, use the tab we pressed on (visualTarget).
       let finalTab: string | null;
       if (d.moved) {
         finalTab = findNearestTab();
@@ -227,7 +260,6 @@ export function LiquidGlassNav({
 
       if (finalTab) {
         onItemChangeRef.current(finalTab);
-        // Also fire per-item onClick if present
         const item = itemsRef.current.find((i) => i.id === finalTab);
         item?.onClick?.();
       }
@@ -251,12 +283,14 @@ export function LiquidGlassNav({
     const ro = new ResizeObserver(() => {
       const rect = container.getBoundingClientRect();
       renderer.resize(rect.width, rect.height);
+      navWidthRef.current = rect.width;
       targetTab(activeRef.current);
     });
     ro.observe(container);
 
     const rect = container.getBoundingClientRect();
     renderer.resize(rect.width, rect.height);
+    navWidthRef.current = rect.width;
     requestAnimationFrame(() => targetTab(activeRef.current));
 
     function loop() {
@@ -286,13 +320,11 @@ export function LiquidGlassNav({
 
       // --- Position / width springs ---
       if (d.active && d.moved) {
-        // Dragging: pill tracks pointer directly
         sx.current = d.currentX;
         const targetVel = d.velocity / Math.max(dt, 0.001);
         sx.velocity += (targetVel - sx.velocity) * 0.15;
         sw.current = sw.target;
       } else {
-        // Spring toward target (pressed tab or active tab)
         updateSpring(sx, dt);
         updateSpring(sw, dt);
       }
@@ -311,6 +343,20 @@ export function LiquidGlassNav({
         pillRef.current.style.width = `${sw.current}px`;
       }
 
+      // --- Clip active layer to pill shape ---
+      if (activeClipRef.current) {
+        const effW = sw.current * morphScaleX;
+        const effH = PILL_HEIGHT * morphScaleY;
+        const cw = navWidthRef.current;
+        const effLeft = sx.current - effW / 2;
+        const effTop = (NAV_HEIGHT - effH) / 2;
+        const effRight = cw - effLeft - effW;
+        const effBottom = NAV_HEIGHT - effTop - effH;
+        const effRadius = Math.min(effW, effH) / 2;
+
+        activeClipRef.current.style.clipPath = `inset(${effTop}px ${effRight}px ${effBottom}px ${effLeft}px round ${effRadius}px)`;
+      }
+
       // --- Render WebGL ---
       renderer.render({
         time: now / 1000,
@@ -321,6 +367,7 @@ export function LiquidGlassNav({
         navRadius: NAV_RADIUS,
         transitionVel: sx.velocity,
         pressAmt: bulge,
+        tintColor: tintColorRef.current,
       });
 
       frame = requestAnimationFrame(loop);
@@ -336,10 +383,32 @@ export function LiquidGlassNav({
     };
   }, [targetTab]);
 
-  // When activeItem changes (from external state), re-target the pill
   useEffect(() => {
     targetTab(activeItem);
   }, [activeItem, targetTab]);
+
+  // Shared tab content renderer
+  const tabContent = (item: (typeof items)[number]) => (
+    <>
+      {item.icon && (
+        <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
+      )}
+      <span style={{ display: 'grid' }}>
+        <span style={{ gridArea: '1 / 1' }}>{item.label}</span>
+        <span
+          aria-hidden
+          style={{
+            gridArea: '1 / 1',
+            fontWeight: 600,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+          }}
+        >
+          {item.label}
+        </span>
+      </span>
+    </>
+  );
 
   return (
     <nav
@@ -373,7 +442,7 @@ export function LiquidGlassNav({
         ...style,
       }}
     >
-      {/* Pill — refraction + glass highlight */}
+      {/* Pill */}
       <div
         ref={pillRef}
         style={{
@@ -407,7 +476,7 @@ export function LiquidGlassNav({
         }}
       />
 
-      {/* Tab items — all pointer interaction handled by nav, not buttons */}
+      {/* Inactive layer (always visible, full width) */}
       {items.map((item, i) => (
         <button
           key={item.id}
@@ -415,49 +484,45 @@ export function LiquidGlassNav({
             itemRefs.current[i] = el;
           }}
           style={{
+            ...BUTTON_STYLE,
             position: 'relative',
             zIndex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            padding: '6px 20px',
-            border: 'none',
-            background: 'none',
-            color: item.id === activeItem ? activeColor : inactiveColor,
-            fontSize: 10,
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
-            fontWeight: item.id === activeItem ? 600 : 400,
-            cursor: 'pointer',
-            transition: 'color 0.2s ease, font-weight 0.2s ease',
-            WebkitTapHighlightColor: 'transparent',
-            WebkitUserSelect: 'none',
-            userSelect: 'none',
-            lineHeight: 1,
+            color: inactiveColor,
+            fontWeight: 400,
           }}
         >
-          {item.icon && (
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
-          )}
-          {/* Invisible bold copy reserves max width, prevents layout shift */}
-          <span style={{ display: 'grid' }}>
-            <span style={{ gridArea: '1 / 1' }}>{item.label}</span>
-            <span
-              aria-hidden
-              style={{
-                gridArea: '1 / 1',
-                fontWeight: 600,
-                visibility: 'hidden',
-                pointerEvents: 'none',
-              }}
-            >
-              {item.label}
-            </span>
-          </span>
+          {tabContent(item)}
         </button>
       ))}
+
+      {/* Active layer (clipped to pill shape — hard edge) */}
+      <div
+        ref={activeClipRef}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 8px',
+          pointerEvents: 'none',
+          zIndex: 2,
+          clipPath: 'inset(100% 100% 100% 100%)',
+        }}
+      >
+        {items.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              ...BUTTON_STYLE,
+              color: activeColor,
+              fontWeight: 600,
+            }}
+          >
+            {tabContent(item)}
+          </div>
+        ))}
+      </div>
     </nav>
   );
 }

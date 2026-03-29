@@ -32,4 +32,5 @@ export interface RenderParams {
   navRadius: number;
   transitionVel: number;
   pressAmt: number;
+  tintColor: [number, number, number];
 }

@@ -12,13 +12,12 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
 
@@ -31,4 +30,4 @@ jobs:
         with:
           generate_release_notes: true
 
-      - run: npm publish --provenance --access public
+      - run: npm publish
