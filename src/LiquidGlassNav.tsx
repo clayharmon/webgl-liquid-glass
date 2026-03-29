@@ -366,6 +366,7 @@ export function LiquidGlassNav({
           '0 8px 32px rgba(0, 0, 0, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2)',
         overflow: 'visible',
         zIndex: 9999,
+        WebkitUserSelect: 'none',
         userSelect: 'none',
         touchAction: 'none',
         cursor: 'pointer',
@@ -432,6 +433,8 @@ export function LiquidGlassNav({
             cursor: 'pointer',
             transition: 'color 0.2s ease, font-weight 0.2s ease',
             WebkitTapHighlightColor: 'transparent',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
             lineHeight: 1,
           }}
         >
