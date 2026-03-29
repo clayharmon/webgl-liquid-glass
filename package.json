@@ -1,6 +1,6 @@
 {
   "name": "webgl-liquid-glass",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Apple Liquid Glass navbar effect for the web using WebGL",
   "license": "MIT",
   "author": "Clay Harmon",
