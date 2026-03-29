@@ -441,7 +441,21 @@ export function LiquidGlassNav({
           {item.icon && (
             <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
           )}
-          <span>{item.label}</span>
+          {/* Invisible bold copy reserves max width, prevents layout shift */}
+          <span style={{ display: 'grid' }}>
+            <span style={{ gridArea: '1 / 1' }}>{item.label}</span>
+            <span
+              aria-hidden
+              style={{
+                gridArea: '1 / 1',
+                fontWeight: 600,
+                visibility: 'hidden',
+                pointerEvents: 'none',
+              }}
+            >
+              {item.label}
+            </span>
+          </span>
         </button>
       ))}
     </nav>
